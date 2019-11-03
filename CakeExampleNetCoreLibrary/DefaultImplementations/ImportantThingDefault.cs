@@ -7,9 +7,19 @@ namespace CakeExampleNetCoreLibrary.DefaultImplementations
         public void DoImportantThing()
         { }
 
-        public object GetImportantThing()
+        public object GetImportantThing(int magicNumber)
         {
-            return new object();
+            if (magicNumber < 0)
+            {
+                return "magic string!";
+            }
+
+            if (magicNumber < 100)
+            {
+                return (double)3.5;
+            }
+
+            return -1;
         }
     }
 }

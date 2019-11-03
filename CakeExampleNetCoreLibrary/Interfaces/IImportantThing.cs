@@ -1,11 +1,9 @@
-﻿using System;
-
-namespace CakeExampleNetCoreLibrary.Interfaces
+﻿namespace CakeExampleNetCoreLibrary.Interfaces
 {
     public interface IImportantThing
     {
         void DoImportantThing();
 
-        object GetImportantThing();
+        object GetImportantThing(int magicNumber);
     }
 }
