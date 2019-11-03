@@ -1,6 +1,6 @@
 #addin "nuget:?package=Cake.Sonar"
 #addin "nuget:?package=Newtonsoft.Json"
-#addin "nuget:?package=Cake.Git&version=0.18.0"
+#addin "nuget:?package=Cake.Git"
 
 #tool "nuget:?package=MSBuild.SonarQube.Runner.Tool"
 #tool "nuget:?package=OpenCover"
@@ -9,7 +9,8 @@ using Newtonsoft.Json;
 
 var target = Argument("target", "Default");
 var configuration = Argument("configuration", "Release");
-var sonar = Argument("sonar", true);
+
+var enableSonarAnalysis = Argument("sonar", false);
 var sonarKey = Argument("sonarKey", string.Empty);
 var sonarUrl = Argument("sonarUrl", "http://localhost:9000");
 var sonarLogin = Argument("sonarLogin", "admin");
@@ -76,7 +77,7 @@ var runTests = Task("RunTests")
     {
         Information(project);
 
-        var openCoverSettings = new OpenCoverSettings()
+        var openCoverSettings = new OpenCoverSettings
         {
             LogLevel = OpenCoverLogLevel.All,
             MergeOutput = true,
@@ -87,25 +88,28 @@ var runTests = Task("RunTests")
         .WithFilter("+[*]*")
         .WithFilter("-[*Test*]*");
 
+        var dotnetCoreSettings = new DotNetCoreTestSettings
+        {
+            Configuration = configuration,
+            Logger = "trx;LogFileName=" + GetTestResultFileName(project),
+            ArgumentCustomization = args => args.Append($"/p:DebugType=full")
+        };
+
+        var coverageResultsFileName = new FilePath(GetCoverageResultsFileName(project));
         OpenCover(tool =>
         {
             Information(project);
-            tool.DotNetCoreTest(project.FullPath, new DotNetCoreTestSettings
-            {
-                Configuration = configuration,
-                Logger = "trx;LogFileName=" + GetTestResultFileName(project),
-                ArgumentCustomization = args => args.Append($"/p:DebugType=full")
-            }
-            );
+            tool.DotNetCoreTest(project.FullPath, dotnetCoreSettings);
         },
-        new FilePath(GetCoverageResultsFileName(project)),
-        openCoverSettings
-        );
+        coverageResultsFileName,
+        openCoverSettings);
     });
 
 var sonarBegin = Task("SonarBegin")
-	.WithCriteria(sonar)
+	.WithCriteria(enableSonarAnalysis)
 	.Does(() => {
+        var vsTestReportsPath = string.Join(",", testProjects.Select(x => GetTestResultFileName(x)));
+        var openCoverReportsPath = string.Join(",", testProjects.Select(x => GetCoverageResultsFileName(x)));
         var sonarBeginSettings = new SonarBeginSettings
         {
             Name = "CakeExamplesNetCore",
@@ -114,8 +118,8 @@ var sonarBegin = Task("SonarBegin")
             Login = sonarLogin,
             Password = sonarPassword,
             Verbose = true,
-            VsTestReportsPath = string.Join(",", testProjects.Select(x => GetTestResultFileName(x))),
-            OpenCoverReportsPath = string.Join(",", testProjects.Select(x => GetCoverageResultsFileName(x))),
+            VsTestReportsPath = vsTestReportsPath,
+            OpenCoverReportsPath = openCoverReportsPath,
             Exclusions = "CakeExampleNetCore/wwwroot/**"
         };
 
@@ -123,7 +127,7 @@ var sonarBegin = Task("SonarBegin")
     });
 
 var sonarMsBuild = Task("MsBuild")
-	.WithCriteria(sonar)
+	.WithCriteria(enableSonarAnalysis)
 	.Does(() => 
     {
         var msBuildSettingsWithRestore = new MSBuildSettings
@@ -150,6 +154,7 @@ var sonarMsBuild = Task("MsBuild")
     });
 
 var sonarEnd = Task("SonarEnd")
+    .WithCriteria(enableSonarAnalysis)
     .Does(() => 
     {
         var sonarEndSettings = new SonarEndSettings
@@ -162,7 +167,7 @@ var sonarEnd = Task("SonarEnd")
     });
 
 var sonarAnalysis = Task("Sonar")
-    .WithCriteria(sonar)
+    .WithCriteria(enableSonarAnalysis)
     .IsDependentOn(sonarBegin)
     .IsDependentOn(sonarMsBuild)
     .IsDependentOn(sonarEnd);
@@ -172,10 +177,6 @@ Task("Default")
     .IsDependentOn(setupOutputDirectory)
     .IsDependentOn(buildSolution)
     .IsDependentOn(runTests)
-    .IsDependentOn(sonarAnalysis)
-    .Does(() =>
-    {
-        Information("Done!");
-    });
+    .IsDependentOn(sonarAnalysis);
 
 RunTarget(target);
