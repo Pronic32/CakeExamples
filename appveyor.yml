@@ -16,6 +16,9 @@ branches:
   only:
     - master
 
+artifacts:
+  - path: artifacts\CakeExampleNetCore
+
 # Build cache
 cache:
 - tools -> build.cake

@@ -17,6 +17,7 @@ var sonarLogin = Argument("sonarLogin", "admin");
 var sonarPassword = Argument("sonarPassword", "admin");
 
 var outputPath = Argument("outputPath", "./artifacts");
+var publishPath = outputPath + "/CakeExampleNetCore/";
 var testResultsPath = outputPath + "/testResults/";
 var testCoverageReportsPath = outputPath + "/testCoverageResults/";
 var solutionName = "CakeExamplesNetCore.sln";
@@ -38,6 +39,7 @@ var setupOutputDirectory = Task("SetupOutputDirectory")
         EnsureDirectoryExists(outputPath);
         CleanDirectory(outputPath);
 
+        EnsureDirectoryExists(publishPath);
         EnsureDirectoryExists(testResultsPath);
         EnsureDirectoryExists(testCoverageReportsPath);
     });
@@ -105,6 +107,18 @@ var runTests = Task("RunTests")
         openCoverSettings);
     });
 
+var publish = Task("Publish")
+	.Does(() => {
+		// self-contained parameter: https://github.com/dotnet/cli/issues/9852
+		DotNetCorePublish("CakeExampleNetCore/CakeExampleNetCore.csproj",
+        new DotNetCorePublishSettings
+		{
+			Configuration = configuration,
+			OutputDirectory = publishPath,
+			ArgumentCustomization = args => args.Append($"--no-restore --self-contained false")
+		});
+	});
+
 var sonarBegin = Task("SonarBegin")
 	.WithCriteria(enableSonarAnalysis)
 	.Does(() => {
@@ -149,8 +163,8 @@ var sonarMsBuild = Task("MsBuild")
         };
 
         // https://stackoverflow.com/questions/46773698/msbuild-15-nuget-restore-and-build
-        MSBuild("./CakeExamplesNetCore.sln", msBuildSettingsWithRestore);
-        MSBuild("./CakeExamplesNetCore.sln", msBuildSettings);
+        MSBuild("./" + solutionName, msBuildSettingsWithRestore);
+        MSBuild("./" + solutionName, msBuildSettings);
     });
 
 var sonarEnd = Task("SonarEnd")
@@ -177,6 +191,7 @@ Task("Default")
     .IsDependentOn(setupOutputDirectory)
     .IsDependentOn(buildSolution)
     .IsDependentOn(runTests)
+    .IsDependentOn(publish)
     .IsDependentOn(sonarAnalysis);
 
 RunTarget(target);
